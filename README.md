@@ -169,9 +169,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 📧 Email: support@billingfast.com
-- 💬 Live Chat: Available on our website
-- 📚 Documentation: [docs.billingfast.com](https://docs.billingfast.com)
+- 📧 Email: vigneshlagishetti789@gmail.com
 - 🐛 Bug Reports: Create an issue on GitHub
 
 ## 🗺️ Roadmap
