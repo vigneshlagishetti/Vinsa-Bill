@@ -1,0 +1,15 @@
+/.env.local
+
+# Dependencies
+/node_modules
+
+# Next.js build output
+/.next/
+/out/
+
+# VSCode editor settings
+/.vscode
+
+# Misc
+.DS_Store
+*.log
