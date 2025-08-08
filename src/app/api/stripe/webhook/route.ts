@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
 })
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
@@ -32,6 +27,9 @@ export async function POST(req: NextRequest) {
       case 'checkout.session.completed':
         const session = event.data.object as Stripe.Checkout.Session
 
+        console.log('Payment successful for session:', session.id)
+        console.log('Session metadata:', session.metadata)
+
         // Update order status to completed
         if (session.metadata?.orderId) {
           const { error } = await supabase
@@ -39,37 +37,51 @@ export async function POST(req: NextRequest) {
             .update({
               status: 'completed',
               payment_status: 'paid',
-              payment_method: 'stripe',
-              paid_at: new Date().toISOString(),
-              stripe_payment_intent_id: session.payment_intent as string,
+              payment_method: 'online'
             })
             .eq('id', session.metadata.orderId)
 
           if (error) {
             console.error('Error updating order status:', error)
           } else {
-            console.log(`Order ${session.metadata.orderId} marked as completed`)
+            console.log(`Order ${session.metadata.orderId} marked as completed and paid`)
           }
+        }
+        break
+
+      case 'checkout.session.expired':
+        const expiredSession = event.data.object as Stripe.Checkout.Session
+
+        // Update order status to cancelled
+        if (expiredSession.metadata?.orderId) {
+          await supabase
+            .from('orders')
+            .update({
+              status: 'cancelled',
+              payment_status: 'failed'
+            })
+            .eq('id', expiredSession.metadata.orderId)
+
+          console.log(`Order ${expiredSession.metadata.orderId} marked as cancelled due to expired session`)
         }
         break
 
       case 'payment_intent.payment_failed':
         const paymentIntent = event.data.object as Stripe.PaymentIntent
 
-        // Find order by payment intent and update status
-        const { data: orders } = await supabase
-          .from('orders')
-          .select('id')
-          .eq('stripe_payment_intent_id', paymentIntent.id)
+        console.log('Payment failed for payment intent:', paymentIntent.id)
 
-        if (orders && orders.length > 0) {
-          await supabase
-            .from('orders')
-            .update({
-              status: 'payment_failed',
-              payment_status: 'failed',
-            })
-            .eq('id', orders[0].id)
+        // Update orders with failed payment status
+        const { error: failedUpdateError } = await supabase
+          .from('orders')
+          .update({
+            status: 'cancelled',
+            payment_status: 'failed'
+          })
+          .eq('order_number', `ORD-${paymentIntent.metadata?.orderId || ''}`)
+
+        if (failedUpdateError) {
+          console.error('Error updating failed payment status:', failedUpdateError)
         }
         break
 

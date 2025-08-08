@@ -1,26 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { currentUser } from '@clerk/nextjs'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
 })
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
 export async function POST(req: NextRequest) {
   try {
-    // Get user ID from headers (set by middleware)
-    const userId = req.headers.get('x-user-id')
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { orderId, amount, currency = 'inr' } = await req.json()
+    const { orderId, amount, currency = 'inr', customer, items } = await req.json()
 
     if (!orderId || !amount) {
       return NextResponse.json(
@@ -32,7 +20,7 @@ export async function POST(req: NextRequest) {
     // Fetch order details from database
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select('*')
       .eq('id', orderId)
       .single()
 
@@ -43,47 +31,76 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
+    // Create line items for Stripe checkout
+    const lineItems = items && items.length > 0 
+      ? items.map((item: any) => ({
           price_data: {
             currency: currency,
             product_data: {
-              name: `Order #${order.id}`,
-              description: `Payment for order containing ${order.order_items?.length || 0} items`,
+              name: item.name || item.product_name,
+              description: item.description || `Quantity: ${item.quantity}`,
             },
-            unit_amount: Math.round(amount * 100), // Convert to paise
+            unit_amount: Math.round(item.price * 100), // Convert to paise
           },
-          quantity: 1,
-        },
-      ],
+          quantity: item.quantity,
+        }))
+      : [
+          {
+            price_data: {
+              currency: currency,
+              product_data: {
+                name: `Order #${order.order_number}`,
+                description: `Payment for Vinsa Bill order`,
+              },
+              unit_amount: Math.round(amount * 100), // Convert to paise
+            },
+            quantity: 1,
+          },
+        ]
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
       mode: 'payment',
-      success_url: `${req.nextUrl.origin}/dashboard/orders?payment=success&order_id=${orderId}`,
-      cancel_url: `${req.nextUrl.origin}/dashboard/orders?payment=cancelled&order_id=${orderId}`,
+      success_url: `${req.nextUrl.origin}/dashboard/purchase?payment=success&order_id=${orderId}`,
+      cancel_url: `${req.nextUrl.origin}/dashboard/purchase?payment=cancelled&order_id=${orderId}`,
+      customer_email: customer?.email || order.customer_email,
       metadata: {
         orderId: orderId.toString(),
-        userId: userId,
-        businessId: order.business_id.toString(),
+        customerName: customer?.name || order.customer_name || 'Guest',
+        customerEmail: customer?.email || order.customer_email || '',
+        customerPhone: customer?.phone || order.customer_phone || '',
+      },
+      billing_address_collection: 'required',
+      shipping_address_collection: {
+        allowed_countries: ['IN'], // India only for now
       },
     })
 
     // Update order status to pending payment
-    await supabase
+    const { error: updateError } = await supabase
       .from('orders')
       .update({ 
-        status: 'pending_payment',
-        stripe_session_id: session.id 
+        payment_status: 'pending',
+        status: 'pending'
       })
       .eq('id', orderId)
 
-    return NextResponse.json({ sessionId: session.id, url: session.url })
+    if (updateError) {
+      console.error('Error updating order status:', updateError)
+    }
+
+    return NextResponse.json({ 
+      sessionId: session.id, 
+      url: session.url,
+      success: true 
+    })
 
   } catch (error) {
     console.error('Error creating checkout session:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }

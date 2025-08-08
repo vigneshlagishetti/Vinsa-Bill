@@ -348,20 +348,16 @@ export function useOrders() {
       setLoading(true)
       const { data, error } = await supabase
         .from('orders')
-        .select(`
-          *,
-          customer:customers(name),
-          order_items(
-            *,
-            product:products(name)
-          )
-        `)
+        .select('*')
         .eq('business_id', business.id)
         .order('created_at', { ascending: false })
 
       if (error) throw error
+      
+      console.log('Orders data from database:', data)
       setOrders(data || [])
     } catch (err) {
+      console.error('Orders fetch error:', err)
       setError(err instanceof Error ? err.message : 'Failed to fetch orders')
     } finally {
       setLoading(false)

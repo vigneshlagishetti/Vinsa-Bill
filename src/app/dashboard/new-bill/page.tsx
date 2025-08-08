@@ -377,6 +377,16 @@ export default function NewBillPage() {
     } catch (error) {
       console.error('Error creating order:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      
+      // Check if it's a database schema error
+      if (errorMessage.includes('customer_email') || errorMessage.includes('column') || errorMessage.includes('schema')) {
+        const shouldFix = confirm(`Database Error: Missing required columns in orders table.\n\nThis usually means the database needs to be updated with the latest schema.\n\nClick OK to go to the database fix page, or Cancel to continue.`)
+        if (shouldFix) {
+          window.location.href = '/debug/quick-db-fix'
+          return
+        }
+      }
+      
       alert(`Failed to create order: ${errorMessage}`)
     } finally {
       setIsProcessing(false)
@@ -406,12 +416,21 @@ export default function NewBillPage() {
               <h1 className="text-xl font-bold text-gray-900">New Bill</h1>
               <p className="text-xs text-gray-500">Vinsa Bill - Made by Lagishetti Vignesh</p>
             </div>
-            <button 
-              onClick={() => setShowCustomerForm(true)}
-              className="p-2 text-blue-600"
-            >
-              <UserIcon className="h-6 w-6" />
-            </button>
+            <div className="flex items-center space-x-2">
+              <Link 
+                href="/debug/quick-db-fix" 
+                className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded border"
+                title="Fix Database Issues"
+              >
+                🔧 Fix DB
+              </Link>
+              <button 
+                onClick={() => setShowCustomerForm(true)}
+                className="p-2 text-blue-600"
+              >
+                <UserIcon className="h-6 w-6" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

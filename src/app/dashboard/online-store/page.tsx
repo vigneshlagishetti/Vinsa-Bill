@@ -104,7 +104,7 @@ function ProductDetailModal({ product, isOpen, onClose, onAddToCart }: ProductDe
                 </div>
                 <div className="flex items-center space-x-4 mb-6">
                   <span className="text-3xl font-bold text-blue-600">
-                    ₹{product.selling_price || product.price}
+                    ₹{product.price}
                   </span>
                   {product.wholesale_price && (
                     <span className="text-lg text-gray-500 line-through">
@@ -192,15 +192,47 @@ function ProductDetailModal({ product, isOpen, onClose, onAddToCart }: ProductDe
 
 export default function OnlineStorePage() {
   const { products, loading } = useProducts()
-  const [cart, setCart] = useState<CartItem[]>([])
+  
+  // Load cart from localStorage on component mount
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedCart = localStorage.getItem('onlineStoreCart')
+        if (savedCart) {
+          const parsed = JSON.parse(savedCart)
+          return parsed.items || []
+        }
+      } catch (error) {
+        console.error('Error loading cart from localStorage:', error)
+      }
+    }
+    return []
+  })
+  
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
   const [showProductModal, setShowProductModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [showCart, setShowCart] = useState(false)
 
+  // Save cart to localStorage whenever cart changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+        localStorage.setItem('onlineStoreCart', JSON.stringify({
+          items: cart,
+          total: total,
+          lastUpdated: new Date().toISOString()
+        }))
+      } catch (error) {
+        console.error('Error saving cart to localStorage:', error)
+      }
+    }
+  }, [cart])
+
   // Get unique categories
-  const categories = ['all', ...new Set(products?.map(p => p.category).filter(Boolean) || [])]
+  const categories = ['all', ...(products?.map(p => p.category).filter(Boolean) || []).filter((value, index, self) => self.indexOf(value) === index)]
 
   // Filter products
   const filteredProducts = products?.filter(product => {
@@ -222,7 +254,7 @@ export default function OnlineStorePage() {
       setCart([...cart, {
         id: product.id,
         name: product.name,
-        price: product.selling_price || product.price,
+        price: product.price,
         quantity,
         stock_quantity: product.stock_quantity
       }])
@@ -239,6 +271,14 @@ export default function OnlineStorePage() {
           : item
       ))
     }
+  }
+
+  const removeFromCart = (id: string) => {
+    setCart(cart.filter(item => item.id !== id))
+  }
+
+  const clearCart = () => {
+    setCart([])
   }
 
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
@@ -422,6 +462,7 @@ export default function OnlineStorePage() {
                           <button
                             onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
                             className="p-1 hover:bg-gray-100 rounded"
+                            disabled={item.quantity <= 1}
                           >
                             <MinusIcon className="h-4 w-4" />
                           </button>
@@ -429,13 +470,23 @@ export default function OnlineStorePage() {
                           <button
                             onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
                             className="p-1 hover:bg-gray-100 rounded"
+                            disabled={item.quantity >= item.stock_quantity}
                           >
                             <PlusIcon className="h-4 w-4" />
                           </button>
                         </div>
-                        <p className="font-bold text-blue-600">
-                          ₹{(item.price * item.quantity).toLocaleString()}
-                        </p>
+                        <div className="flex items-center space-x-2">
+                          <p className="font-bold text-blue-600">
+                            ₹{(item.price * item.quantity).toLocaleString()}
+                          </p>
+                          <button
+                            onClick={() => removeFromCart(item.id)}
+                            className="p-1 hover:bg-red-100 rounded text-red-600 hover:text-red-700"
+                            title="Remove from cart"
+                          >
+                            <XMarkIcon className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -444,29 +495,52 @@ export default function OnlineStorePage() {
                 {/* Cart Footer */}
                 {cart.length > 0 && (
                   <div className="mt-6 pt-6 border-t border-gray-200">
-                    <div className="flex items-center justify-between mb-6">
-                      <span className="text-lg font-bold text-gray-900">Total:</span>
-                      <span className="text-2xl font-bold text-blue-600">
-                        ₹{cartTotal.toLocaleString()}
-                      </span>
+                    {/* Cart Summary */}
+                    <div className="space-y-2 mb-6">
+                      <div className="flex items-center justify-between text-sm text-gray-600">
+                        <span>Items ({cartItemsCount}):</span>
+                        <span>₹{cartTotal.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-lg font-bold text-gray-900">Total:</span>
+                        <span className="text-2xl font-bold text-blue-600">
+                          ₹{cartTotal.toLocaleString()}
+                        </span>
+                      </div>
                     </div>
-                    
-                    <Link href="/dashboard/purchase" state={{ cartItems: cart, total: cartTotal }}>
+
+                    {/* Action Buttons */}
+                    <div className="space-y-3">
+                      <Link href="/dashboard/purchase">
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold hover:bg-green-700 transition-colors"
+                          onClick={() => {
+                            // Store cart in localStorage for purchase page
+                            localStorage.setItem('onlineStoreCart', JSON.stringify({
+                              items: cart,
+                              total: cartTotal
+                            }))
+                          }}
+                        >
+                          Proceed to Purchase
+                        </motion.button>
+                      </Link>
+                      
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold hover:bg-green-700 transition-colors"
                         onClick={() => {
-                          // Store cart in localStorage for purchase page
-                          localStorage.setItem('onlineStoreCart', JSON.stringify({
-                            items: cart,
-                            total: cartTotal
-                          }))
+                          if (confirm('Are you sure you want to clear your cart?')) {
+                            clearCart()
+                          }
                         }}
+                        className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-300 transition-colors"
                       >
-                        Proceed to Purchase
+                        Clear Cart
                       </motion.button>
-                    </Link>
+                    </div>
                   </div>
                 )}
               </div>

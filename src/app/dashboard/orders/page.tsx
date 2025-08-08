@@ -15,6 +15,36 @@ import {
 } from '@heroicons/react/24/outline'
 import { useOrders } from '@/hooks/useSupabase'
 
+// Extended Order type to include the additional fields we store
+interface ExtendedOrder {
+  id: string
+  business_id: string
+  customer_id?: string
+  total_amount: number
+  discount?: number
+  tax_amount?: number
+  payment_method: 'cash' | 'card' | 'upi' | 'credit'
+  payment_status: 'pending' | 'paid' | 'partial'
+  status: 'draft' | 'completed' | 'cancelled'
+  created_at: string
+  updated_at: string
+  // Additional fields we store
+  customer_name?: string
+  customer_phone?: string
+  customer_email?: string
+  customer_address?: string
+  subtotal?: number
+  order_type?: string
+  order_number?: string
+  order_items?: Array<{
+    id: string
+    product_name: string
+    quantity: number
+    unit_price: number
+    total_price: number
+  }>
+}
+
 const dateFilters = [
   { value: 'today', label: 'Today' },
   { value: 'yesterday', label: 'Yesterday' },
@@ -51,23 +81,49 @@ export default function OrdersPage() {
 
   // Transform orders data
   const ordersData = useMemo(() => {
-    if (!orders) return []
+    if (!orders || orders.length === 0) return []
     
-    return orders.map(order => ({
-      id: order.id.slice(-6).toUpperCase(),
-      customerName: 'Customer', // TODO: Join with customer data
-      customerPhone: 'No phone', // TODO: Join with customer data
-      items: 0, // TODO: Join with order items
-      amount: order.total_amount,
-      time: new Date(order.created_at).toLocaleTimeString('en-IN', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: true 
-      }),
-      status: order.status === 'completed' ? 'Completed' : 
-              order.status === 'cancelled' ? 'Cancelled' : 'Processing',
-      paymentStatus: order.payment_status === 'paid' ? 'Paid' : 'Pending'
-    }))
+    return orders.map((order: any) => {
+      // Debug log to see what data we're getting
+      console.log('Processing order:', {
+        id: order.id,
+        customer_name: order.customer_name,
+        customer_phone: order.customer_phone,
+        customer_email: order.customer_email,
+        total_amount: order.total_amount,
+        subtotal: order.subtotal,
+        tax_amount: order.tax_amount,
+        order_type: order.order_type,
+        created_at: order.created_at
+      })
+      
+      return {
+        id: order.order_number || order.id.slice(-6).toUpperCase(),
+        customerName: order.customer_name || 'No Customer Data',
+        customerPhone: order.customer_phone || 'No phone',
+        customerEmail: order.customer_email || 'No email',
+        items: 1, // Default to 1 if no order_items data
+        amount: order.total_amount,
+        subtotal: order.subtotal || (order.total_amount / 1.18), // Calculate subtotal if not available
+        taxAmount: order.tax_amount || (order.total_amount - (order.total_amount / 1.18)), // Calculate tax if not available
+        time: new Date(order.created_at).toLocaleTimeString('en-IN', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: true 
+        }),
+        date: new Date(order.created_at).toLocaleDateString('en-IN'),
+        status: order.status === 'completed' ? 'Completed' : 
+                order.status === 'cancelled' ? 'Cancelled' : 
+                order.status === 'draft' ? 'Draft' : 'Completed',
+        paymentStatus: order.payment_status === 'paid' ? 'Paid' : 
+                      order.payment_status === 'partial' ? 'Partial' : 'Pending',
+        paymentMethod: order.payment_method === 'card' ? 'Card' : 
+                       order.payment_method === 'upi' ? 'UPI' :
+                       order.payment_method === 'credit' ? 'Credit' : 'Cash',
+        orderType: order.order_type || 'POS',
+        orderItems: []
+      }
+    })
   }, [orders])
 
   const getStatusColor = (status: string) => {
@@ -248,50 +304,111 @@ export default function OrdersPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="px-4 py-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
+            {ordersData.length > 0 && (
+              <p className="text-sm text-gray-600 mt-1">{ordersData.length} orders found</p>
+            )}
           </div>
 
-          <div className="divide-y divide-gray-200">
-            {ordersData.map((order, index) => (
-              <motion.div
-                key={order.id}
-                className="p-4"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.4 + (index * 0.1) }}
+          {ordersData.length === 0 ? (
+            <div className="p-8 text-center">
+              <ShoppingBagIcon className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
+              <p className="text-gray-600 mb-4">Start selling to see your orders here</p>
+              <Link 
+                href="/dashboard/pos"
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <h4 className="font-semibold text-gray-900">{order.customerName}</h4>
-                      <span className="font-bold text-blue-600">₹{order.amount.toLocaleString()}</span>
+                Start Selling
+              </Link>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {ordersData.map((order, index) => (
+                <motion.div
+                  key={order.id}
+                  className="p-4 hover:bg-gray-50 transition-colors"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.4 + (index * 0.1) }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="font-semibold text-gray-900">{order.customerName}</h4>
+                        <span className="font-bold text-blue-600">₹{order.amount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center space-x-2 text-sm text-gray-600">
+                        {order.customerPhone !== 'No phone' && (
+                          <span>{order.customerPhone}</span>
+                        )}
+                        {order.customerEmail !== 'No email' && (
+                          <span>• {order.customerEmail}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
+                        <span>Order #{order.id}</span>
+                        <span>•</span>
+                        <span>{order.date} at {order.time}</span>
+                        <span>•</span>
+                        <span>{order.items} item{order.items !== 1 ? 's' : ''}</span>
+                        <span>•</span>
+                        <span>{order.paymentMethod}</span>
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-600">{order.customerPhone}</p>
-                    <p className="text-xs text-gray-500 mt-1">Order #{order.id} • {order.time} • {order.items} items</p>
                   </div>
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="flex space-x-2">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                      {order.status}
-                    </span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(order.paymentStatus)}`}>
-                      {order.paymentStatus}
-                    </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex space-x-2">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                        {order.status}
+                      </span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(order.paymentStatus)}`}>
+                        {order.paymentStatus}
+                      </span>
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                        {order.orderType}
+                      </span>
+                    </div>
+                    
+                    <div className="flex space-x-2">
+                      <button 
+                        className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                        title="View Order"
+                      >
+                        <EyeIcon className="h-4 w-4" />
+                      </button>
+                      <button 
+                        className="p-2 text-gray-400 hover:text-green-600 transition-colors"
+                        title="Print Receipt"
+                      >
+                        <PrinterIcon className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
-                  
-                  <div className="flex space-x-2">
-                    <button className="p-2 text-gray-400 hover:text-gray-600">
-                      <EyeIcon className="h-4 w-4" />
-                    </button>
-                    <button className="p-2 text-gray-400 hover:text-gray-600">
-                      <PrinterIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+
+                  {/* Order Details Breakdown */}
+                  {order.subtotal && order.taxAmount > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <div className="text-xs text-gray-600 space-y-1">
+                        <div className="flex justify-between">
+                          <span>Subtotal:</span>
+                          <span>₹{Math.round(order.subtotal).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Tax:</span>
+                          <span>₹{Math.round(order.taxAmount).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between font-medium text-gray-900">
+                          <span>Total:</span>
+                          <span>₹{order.amount.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

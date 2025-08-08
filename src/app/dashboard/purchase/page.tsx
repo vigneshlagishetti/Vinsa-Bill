@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import StripePaymentModal from '@/components/StripePaymentModal'
+import { useBusiness } from '@/hooks/useSupabase'
 import { 
   ShoppingCartIcon,
   UserIcon,
@@ -39,6 +41,7 @@ interface OrderSummary {
 
 export default function PurchasePage() {
   const router = useRouter()
+  const { business } = useBusiness()
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
     name: '',
@@ -55,6 +58,7 @@ export default function PurchasePage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState(false)
   const [orderId, setOrderId] = useState('')
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
 
   useEffect(() => {
     // Load cart from localStorage
@@ -78,29 +82,59 @@ export default function PurchasePage() {
   }, [router])
 
   const updateQuantity = (id: string, newQuantity: number) => {
+    if (!cartItems) return
+    
+    let updatedItems: CartItem[]
+    
     if (newQuantity <= 0) {
-      setCartItems(cartItems.filter(item => item.id !== id))
+      updatedItems = cartItems.filter(item => item.id !== id)
     } else {
-      setCartItems(cartItems.map(item =>
+      updatedItems = cartItems.map(item =>
         item.id === id
           ? { ...item, quantity: newQuantity }
           : item
-      ))
+      )
     }
     
-    // Recalculate totals
-    const updatedItems = cartItems.map(item =>
-      item.id === id
-        ? { ...item, quantity: newQuantity }
-        : item
-    ).filter(item => item.quantity > 0)
+    setCartItems(updatedItems)
     
+    // Update localStorage to keep cart in sync
     const subtotal = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
     const tax = subtotal * 0.18
+    const total = subtotal + tax
+    
+    localStorage.setItem('onlineStoreCart', JSON.stringify({
+      items: updatedItems,
+      total: total,
+      lastUpdated: new Date().toISOString()
+    }))
+    
     setOrderSummary({
       subtotal,
       tax,
-      total: subtotal + tax
+      total
+    })
+  }
+
+  const removeItem = (id: string) => {
+    const updatedItems = cartItems.filter(item => item.id !== id)
+    setCartItems(updatedItems)
+    
+    // Update localStorage to keep cart in sync
+    const subtotal = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+    const tax = subtotal * 0.18
+    const total = subtotal + tax
+    
+    localStorage.setItem('onlineStoreCart', JSON.stringify({
+      items: updatedItems,
+      total: total,
+      lastUpdated: new Date().toISOString()
+    }))
+    
+    setOrderSummary({
+      subtotal,
+      tax,
+      total
     })
   }
 
@@ -115,7 +149,7 @@ export default function PurchasePage() {
     return customerInfo.name.trim() !== '' &&
            customerInfo.email.trim() !== '' &&
            customerInfo.phone.trim() !== '' &&
-           cartItems.length > 0
+           cartItems && cartItems.length > 0
   }
 
   const processOrder = async () => {
@@ -129,6 +163,7 @@ export default function PurchasePage() {
     try {
       // Create order
       const orderData = {
+        business_id: business?.id,
         customer_name: customerInfo.name,
         customer_email: customerInfo.email,
         customer_phone: customerInfo.phone,
@@ -195,7 +230,18 @@ export default function PurchasePage() {
           localStorage.removeItem('onlineStoreCart')
         }
       } else {
-        throw new Error('Order creation failed')
+        const errorData = await response.json()
+        if (errorData.error === 'Business setup required') {
+          if (confirm(
+            'Business Setup Required\n\n' +
+            'Your business profile needs to be initialized before creating orders.\n\n' +
+            'Click OK to set up your business now, or Cancel to continue.'
+          )) {
+            window.location.href = '/debug/business-setup'
+          }
+          return
+        }
+        throw new Error(errorData.details || 'Order creation failed')
       }
     } catch (error) {
       console.error('Order processing error:', error)
@@ -363,11 +409,11 @@ export default function PurchasePage() {
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                 <ShoppingCartIcon className="h-5 w-5 mr-2" />
-                Order Items ({cartItems.length})
+                Order Items ({cartItems?.length || 0})
               </h2>
               
               <div className="space-y-4">
-                {cartItems.map((item) => (
+                {cartItems && cartItems.map((item) => (
                   <div key={item.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
                     <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                       <span className="font-bold text-blue-600">{item.name.charAt(0)}</span>
@@ -379,21 +425,32 @@ export default function PurchasePage() {
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                        className="p-1 hover:bg-gray-200 rounded"
+                        className="p-2 hover:bg-gray-200 rounded text-gray-600 hover:text-gray-800"
+                        disabled={item.quantity <= 1}
                       >
                         -
                       </button>
                       <span className="w-8 text-center font-medium">{item.quantity}</span>
                       <button
                         onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        className="p-1 hover:bg-gray-200 rounded"
+                        className="p-2 hover:bg-gray-200 rounded text-gray-600 hover:text-gray-800"
+                        disabled={item.quantity >= item.stock_quantity}
                       >
                         +
                       </button>
                     </div>
-                    <p className="font-bold text-blue-600 min-w-[80px] text-right">
-                      ₹{(item.price * item.quantity).toLocaleString()}
-                    </p>
+                    <div className="flex items-center space-x-3">
+                      <p className="font-bold text-blue-600 min-w-[80px] text-right">
+                        ₹{(item.price * item.quantity).toLocaleString()}
+                      </p>
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        className="p-2 hover:bg-red-100 rounded text-red-600 hover:text-red-700"
+                        title="Remove from cart"
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -423,7 +480,7 @@ export default function PurchasePage() {
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={processOrder}
+                onClick={() => setShowPaymentModal(true)}
                 disabled={isProcessing || !validateForm()}
                 className={`w-full py-4 rounded-xl font-semibold transition-colors ${
                   isProcessing || !validateForm()
@@ -440,6 +497,44 @@ export default function PurchasePage() {
             </div>
           </div>
         </div>
+
+        {/* Stripe Payment Modal */}
+        {showPaymentModal && cartItems && cartItems.length > 0 && (
+          <StripePaymentModal
+            isOpen={showPaymentModal}
+            onClose={() => setShowPaymentModal(false)}
+            orderData={{
+              business_id: business?.id,
+              customer_name: customerInfo.name,
+              customer_email: customerInfo.email,
+              customer_phone: customerInfo.phone,
+              customer_address: customerInfo.address,
+              items: cartItems?.map(item => ({
+                product_id: item.id,
+                product_name: item.name,
+                quantity: item.quantity,
+                unit_price: item.price,
+                total_price: item.price * item.quantity
+              })) || [],
+              subtotal: orderSummary.subtotal,
+              tax_amount: orderSummary.tax,
+              total_amount: orderSummary.total,
+              payment_method: paymentMethod,
+              status: 'pending',
+              payment_status: 'pending',
+              order_type: 'online_store'
+            }}
+            onSuccess={(orderId) => {
+              setOrderId(orderId)
+              setOrderSuccess(true)
+              localStorage.removeItem('onlineStoreCart')
+            }}
+            onError={(error) => {
+              console.error('Payment error:', error)
+              alert('Payment failed. Please try again.')
+            }}
+          />
+        )}
       </div>
     </div>
   )
