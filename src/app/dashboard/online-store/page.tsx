@@ -162,7 +162,7 @@ function ProductDetailModal({ product, isOpen, onClose, onAddToCart }: ProductDe
                     </button>
                   </div>
                   <span className="text-sm text-gray-600">
-                    Total: ₹{((product.selling_price || product.price) * quantity).toLocaleString()}
+                    Total: ₹{(product.price * quantity).toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -383,7 +383,7 @@ export default function OnlineStorePage() {
                   <h3 className="font-medium text-gray-900 truncate">{product.name}</h3>
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-bold text-blue-600">
-                      ₹{product.selling_price || product.price}
+                      ₹{product.price}
                     </span>
                     {product.stock_quantity < 10 && (
                       <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full">

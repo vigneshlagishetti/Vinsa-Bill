@@ -72,7 +72,7 @@ After running this SQL, your orders will work correctly! ✨`)
               Fix Database Constraints Error
             </h1>
             <p className="text-gray-600">
-              Resolve: "violates check constraint orders_status_check"
+              Resolve: &quot;violates check constraint orders_status_check&quot;
             </p>
           </div>
 
@@ -80,7 +80,7 @@ After running this SQL, your orders will work correctly! ✨`)
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
             <h3 className="font-semibold text-red-800 mb-2">🚨 Current Error:</h3>
             <p className="text-red-700 text-sm font-mono">
-              Failed to create order: new row for relation "orders" violates check constraint "orders_status_check"
+              Failed to create order: new row for relation &quot;orders&quot; violates check constraint &quot;orders_status_check&quot;
             </p>
             <p className="text-red-600 text-sm mt-2">
               <strong>Cause:</strong> Your database only allows specific status values, but our API is sending values not in the constraint.
@@ -136,7 +136,7 @@ After running this SQL, your orders will work correctly! ✨`)
           <div className="bg-blue-50 rounded-lg p-4 mt-6">
             <h3 className="font-semibold text-blue-900 mb-2">📝 How to Fix:</h3>
             <ol className="text-blue-800 text-sm space-y-2 list-decimal list-inside">
-              <li>Click "Generate Database Fix" above</li>
+              <li>Click &quot;Generate Database Fix&quot; above</li>
               <li>Copy the SQL code from the results</li>  
               <li>Go to your Supabase Dashboard → SQL Editor</li>
               <li>Paste and run the SQL code</li>

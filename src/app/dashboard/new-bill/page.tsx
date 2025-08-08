@@ -910,6 +910,18 @@ export default function NewBillPage() {
           payment_status: 'pending',
           order_type: 'pos'
         }}
+        onSuccess={(orderId) => {
+          console.log('Payment successful for order:', orderId)
+          setCurrentOrderId(orderId)
+          setShowPaymentModal(false)
+          setShowOrderComplete(true)
+          resetBill()
+        }}
+        onError={(error) => {
+          console.error('Payment failed:', error)
+          alert(`Payment failed: ${error}`)
+          setShowPaymentModal(false)
+        }}
       />
     </div>
   )

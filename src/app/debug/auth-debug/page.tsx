@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
@@ -18,7 +18,7 @@ export default function AuthDebugPage() {
   const [loading, setLoading] = useState(false)
   const [debugInfo, setDebugInfo] = useState<AuthDebugInfo | null>(null)
 
-  const runAuthDebug = async () => {
+  const runAuthDebug = useCallback(async () => {
     setLoading(true)
     
     try {
@@ -96,13 +96,13 @@ export default function AuthDebugPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
   useEffect(() => {
     if (user) {
       runAuthDebug()
     }
-  }, [user]) // runAuthDebug is not memoized, so we exclude it to avoid infinite loops
+  }, [user, runAuthDebug])
 
   const StatusIcon = ({ success }: { success: boolean | null }) => {
     if (success === null) return <div className="w-5 h-5 bg-gray-300 rounded-full" />

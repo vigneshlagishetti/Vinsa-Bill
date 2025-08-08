@@ -318,7 +318,7 @@ export default function POSDashboard() {
                   </div>
                   <h4 className="text-xs font-medium text-gray-900 mb-1 truncate">{product.name}</h4>
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold text-blue-600">₹{product.selling_price || product.price}</p>
+                    <p className="text-sm font-bold text-blue-600">₹{product.price}</p>
                     {product.stock_quantity < 10 && (
                       <span className="text-xs bg-red-100 text-red-600 px-1 rounded">Low</span>
                     )}
