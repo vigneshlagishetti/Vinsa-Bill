@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useProducts, useCustomers, useOrders } from '@/hooks/useSupabase'
-import PaymentModal from '@/components/PaymentModal'
+import StripePaymentModal from '@/components/StripePaymentModal'
 import { 
   MagnifyingGlassIcon,
   QrCodeIcon,
@@ -357,6 +357,7 @@ export default function NewBillPage() {
         payment_status: 'pending',
         items: billItems.map(item => ({
           product_id: item.id,
+          product_name: item.name,
           quantity: item.quantity,
           unit_price: item.price,
           total_price: item.total
@@ -882,18 +883,32 @@ export default function NewBillPage() {
       </AnimatePresence>
 
       {/* Payment Modal */}
-      <PaymentModal
+      <StripePaymentModal
         isOpen={showPaymentModal}
         onClose={() => {
           setShowPaymentModal(false)
           setShowOrderComplete(true)
         }}
-        orderId={currentOrderId || ''}
-        amount={getTotal()}
-        orderDetails={{
-          customerName: customerInfo.name || 'Walk-in Customer',
-          itemCount: billItems.length,
-          total: getTotal()
+        orderData={{
+          business_id: '', // Will be set by the component
+          customer_name: customerInfo.name || 'Walk-in Customer',
+          customer_email: customerInfo.email || '',
+          customer_phone: customerInfo.phone || '',
+          customer_address: '',
+          items: billItems.map(item => ({
+            product_id: item.id,
+            product_name: item.name,
+            quantity: item.quantity,
+            unit_price: item.price,
+            total_price: item.total
+          })),
+          subtotal: getSubtotal(),
+          tax_amount: getTax(),
+          total_amount: getTotal(),
+          payment_method: paymentMethod,
+          status: 'pending',
+          payment_status: 'pending',
+          order_type: 'pos'
         }}
       />
     </div>
