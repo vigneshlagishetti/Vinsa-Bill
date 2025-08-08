@@ -256,12 +256,6 @@ export function useCustomers() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (business) {
-      fetchCustomers()
-    }
-  }, [business])
-
   const fetchCustomers = useCallback(async () => {
     if (!business) return
 
@@ -281,6 +275,12 @@ export function useCustomers() {
       setLoading(false)
     }
   }, [business])
+
+  useEffect(() => {
+    if (business) {
+      fetchCustomers()
+    }
+  }, [business, fetchCustomers])
 
   const addCustomer = async (customer: Omit<Customer, 'id' | 'business_id' | 'created_at' | 'updated_at'>) => {
     if (!business) return
@@ -341,12 +341,6 @@ export function useOrders() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (business) {
-      fetchOrders()
-    }
-  }, [business])
-
   const fetchOrders = useCallback(async () => {
     if (!business) return
 
@@ -373,6 +367,12 @@ export function useOrders() {
       setLoading(false)
     }
   }, [business])
+
+  useEffect(() => {
+    if (business) {
+      fetchOrders()
+    }
+  }, [business, fetchOrders])
 
   const createOrder = async (orderData: {
     customer_name?: string
@@ -423,24 +423,35 @@ export function useOrders() {
         notes: orderData.notes
       })
 
+      // Prepare order data - only include fields that exist in database
+      const orderInsertData: any = {
+        business_id: business.id,
+        customer_id: orderData.customer_id,
+        order_number: orderNumber,
+        total_amount: totalAmount,
+        discount,
+        tax_amount: taxAmount,
+        payment_method: orderData.payment_method || 'cash',
+        payment_status: orderData.payment_status || 'pending',
+        status: orderData.status || 'pending',
+        notes: orderData.notes
+      }
+
+      // Add customer fields only if they exist (to handle database schema differences)
+      if (orderData.customer_name) {
+        orderInsertData.customer_name = orderData.customer_name
+      }
+      if (orderData.customer_phone) {
+        orderInsertData.customer_phone = orderData.customer_phone
+      }
+      if (orderData.customer_email) {
+        orderInsertData.customer_email = orderData.customer_email
+      }
+
       // Create order
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .insert({
-          business_id: business.id,
-          customer_id: orderData.customer_id,
-          customer_name: orderData.customer_name,
-          customer_phone: orderData.customer_phone,
-          customer_email: orderData.customer_email,
-          order_number: orderNumber,
-          total_amount: totalAmount,
-          discount,
-          tax_amount: taxAmount,
-          payment_method: orderData.payment_method || 'cash',
-          payment_status: orderData.payment_status || 'pending',
-          status: orderData.status || 'pending',
-          notes: orderData.notes
-        })
+        .insert(orderInsertData)
         .select()
         .single()
 
